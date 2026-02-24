@@ -1,0 +1,34 @@
+{
+  "agent_id": "699d9bcdbb917835c88b22e0",
+  "agent_name": "Lead Scraping Agent",
+  "agent_type": "json",
+  "accessor": "json",
+  "has_module_outputs": false,
+  "response_schema": {
+    "type": "object",
+    "properties": {
+      "leads": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "practice_name": {"type": "string"},
+            "phone": {"type": "string"},
+            "address": {"type": "string"},
+            "website": {"type": "string"},
+            "source": {"type": "string"},
+            "practice_type": {"type": "string"},
+            "date_scraped": {"type": "string"}
+          },
+          "required": ["practice_name", "phone", "address", "website", "source", "practice_type", "date_scraped"],
+          "additionalProperties": false
+        }
+      },
+      "total_leads": {"type": "number"},
+      "search_location": {"type": "string"},
+      "status": {"type": "string"}
+    },
+    "required": ["leads", "total_leads", "search_location", "status"],
+    "additionalProperties": false
+  }
+}

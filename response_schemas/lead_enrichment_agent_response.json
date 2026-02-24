@@ -1,0 +1,37 @@
+{
+  "agent_id": "699d9bcd878ad4c6b7213044",
+  "agent_name": "Lead Enrichment Agent",
+  "agent_type": "json",
+  "accessor": "json",
+  "has_module_outputs": false,
+  "response_schema": {
+    "type": "object",
+    "properties": {
+      "enriched_leads": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "practice_name": {"type": "string"},
+            "practice_size": {"type": "string"},
+            "staff_count_estimate": {"type": "string"},
+            "review_sentiment": {"type": "string"},
+            "review_summary": {"type": "string"},
+            "tech_adoption_score": {"type": "string"},
+            "tech_signals": {"type": "string"},
+            "growth_indicators": {"type": "string"},
+            "pain_points": {"type": "string"},
+            "call_volume_estimate": {"type": "string"},
+            "enrichment_confidence": {"type": "string"}
+          },
+          "required": ["practice_name", "practice_size", "staff_count_estimate", "review_sentiment", "review_summary", "tech_adoption_score", "tech_signals", "growth_indicators", "pain_points", "call_volume_estimate", "enrichment_confidence"],
+          "additionalProperties": false
+        }
+      },
+      "total_enriched": {"type": "number"},
+      "status": {"type": "string"}
+    },
+    "required": ["enriched_leads", "total_enriched", "status"],
+    "additionalProperties": false
+  }
+}

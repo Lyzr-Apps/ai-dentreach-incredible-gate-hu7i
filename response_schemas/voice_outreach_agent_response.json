@@ -1,0 +1,29 @@
+{
+  "agent_id": "699d9c0c25bfd8a7382bdee6",
+  "agent_name": "Voice Outreach Agent",
+  "agent_type": "voice",
+  "accessor": "voice",
+  "has_module_outputs": false,
+  "response_schema": {
+    "type": "object",
+    "properties": {
+      "call_summary": {
+        "type": "object",
+        "properties": {
+          "lead_name": {"type": "string"},
+          "call_duration": {"type": "string"},
+          "outcome": {"type": "string"},
+          "interest_level": {"type": "string"},
+          "objections_raised": {"type": "string"},
+          "next_steps": {"type": "string"},
+          "demo_requested": {"type": "string"},
+          "notes": {"type": "string"}
+        },
+        "required": ["lead_name", "call_duration", "outcome", "interest_level", "objections_raised", "next_steps", "demo_requested", "notes"],
+        "additionalProperties": false
+      }
+    },
+    "required": ["call_summary"],
+    "additionalProperties": false
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "agent_id": "699d9c2f25bfd8a7382bdeee",
+  "agent_name": "Demo Delivery Agent",
+  "agent_type": "json",
+  "accessor": "json",
+  "has_module_outputs": false,
+  "response_schema": {
+    "type": "object",
+    "properties": {
+      "email_details": {
+        "type": "object",
+        "properties": {
+          "recipient_email": {"type": "string"},
+          "subject": {"type": "string"},
+          "body_preview": {"type": "string"},
+          "personalization_factors": {"type": "string"},
+          "send_status": {"type": "string"},
+          "sent_at": {"type": "string"},
+          "practice_name": {"type": "string"}
+        },
+        "required": ["recipient_email", "subject", "body_preview", "personalization_factors", "send_status", "sent_at", "practice_name"],
+        "additionalProperties": false
+      }
+    },
+    "required": ["email_details"],
+    "additionalProperties": false
+  }
+}

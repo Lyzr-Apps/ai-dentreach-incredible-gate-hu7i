@@ -1,0 +1,87 @@
+{
+  "workflow": {
+    "nodes": [
+      {"id": "input_node", "type": "Input", "label": "User Input", "nodeCategory": "input"},
+      {"id": "lead_pipeline_manager", "type": "Agent", "label": "Lead Pipeline Manager", "nodeCategory": "agent"},
+      {"id": "lead_scraping_agent", "type": "Agent", "label": "Lead Scraping Agent", "nodeCategory": "agent"},
+      {"id": "lead_enrichment_agent", "type": "Agent", "label": "Lead Enrichment Agent", "nodeCategory": "agent"},
+      {"id": "lead_qualification_agent", "type": "Agent", "label": "Lead Qualification Agent", "nodeCategory": "agent"},
+      {"id": "voice_outreach_agent", "type": "Agent", "label": "Voice Outreach Agent", "nodeCategory": "agent"},
+      {"id": "demo_delivery_agent", "type": "Agent", "label": "Demo Delivery Agent", "nodeCategory": "agent"},
+      {"id": "follow_up_agent", "type": "Agent", "label": "Follow-Up Agent", "nodeCategory": "agent"},
+      {"id": "output_node", "type": "Output", "label": "Output", "nodeCategory": "end"}
+    ],
+    "edges": [
+      {"source": "input_node", "target": "lead_pipeline_manager"},
+      {"source": "lead_pipeline_manager", "target": "lead_scraping_agent"},
+      {"source": "lead_pipeline_manager", "target": "lead_enrichment_agent"},
+      {"source": "lead_pipeline_manager", "target": "lead_qualification_agent"},
+      {"source": "lead_pipeline_manager", "target": "voice_outreach_agent"},
+      {"source": "voice_outreach_agent", "target": "demo_delivery_agent"},
+      {"source": "demo_delivery_agent", "target": "follow_up_agent"},
+      {"source": "follow_up_agent", "target": "output_node"}
+    ]
+  },
+  "agents": [
+    {
+      "node_id": "lead_scraping_agent",
+      "agent_id": "699d9bcdbb917835c88b22e0",
+      "name": "Lead Scraping Agent",
+      "type": "sub-agent",
+      "provider": "openai",
+      "model": "gpt-4.1"
+    },
+    {
+      "node_id": "lead_enrichment_agent",
+      "agent_id": "699d9bcd878ad4c6b7213044",
+      "name": "Lead Enrichment Agent",
+      "type": "sub-agent",
+      "provider": "perplexity",
+      "model": "sonar-pro"
+    },
+    {
+      "node_id": "lead_qualification_agent",
+      "agent_id": "699d9bce608ccd5b6e6834ca",
+      "name": "Lead Qualification Agent",
+      "type": "sub-agent",
+      "provider": "openai",
+      "model": "gpt-4.1"
+    },
+    {
+      "node_id": "lead_pipeline_manager",
+      "agent_id": "699d9c0b878ad4c6b7213054",
+      "name": "Lead Pipeline Manager",
+      "type": "manager",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "managed_agents": ["699d9bcdbb917835c88b22e0", "699d9bcd878ad4c6b7213044", "699d9bce608ccd5b6e6834ca"]
+    },
+    {
+      "node_id": "voice_outreach_agent",
+      "agent_id": "699d9c0c25bfd8a7382bdee6",
+      "name": "Voice Outreach Agent",
+      "type": "voice",
+      "provider": "openai",
+      "model": "gpt-4.1"
+    },
+    {
+      "node_id": "demo_delivery_agent",
+      "agent_id": "699d9c2f25bfd8a7382bdeee",
+      "name": "Demo Delivery Agent",
+      "type": "independent",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "tools": ["GMAIL_SEND_EMAIL"]
+    },
+    {
+      "node_id": "follow_up_agent",
+      "agent_id": "699d9c2f878ad4c6b7213058",
+      "name": "Follow-Up Agent",
+      "type": "independent",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "tools": ["GMAIL_SEND_EMAIL"],
+      "schedule_id": "699d9c38399dfadeac390b70"
+    }
+  ]
+}

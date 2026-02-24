@@ -1,0 +1,54 @@
+{
+  "agent_id": "699d9c0b878ad4c6b7213054",
+  "agent_name": "Lead Pipeline Manager",
+  "agent_type": "json",
+  "accessor": "json",
+  "has_module_outputs": false,
+  "response_schema": {
+    "type": "object",
+    "properties": {
+      "pipeline_summary": {
+        "type": "object",
+        "properties": {
+          "total_scraped": {"type": "number"},
+          "total_enriched": {"type": "number"},
+          "total_qualified": {"type": "number"},
+          "hot_leads": {"type": "number"},
+          "warm_leads": {"type": "number"},
+          "cold_leads": {"type": "number"},
+          "execution_time": {"type": "string"},
+          "status": {"type": "string"}
+        },
+        "required": ["total_scraped", "total_enriched", "total_qualified", "hot_leads", "warm_leads", "cold_leads", "execution_time", "status"],
+        "additionalProperties": false
+      },
+      "scored_leads": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "practice_name": {"type": "string"},
+            "phone": {"type": "string"},
+            "address": {"type": "string"},
+            "website": {"type": "string"},
+            "practice_type": {"type": "string"},
+            "practice_size": {"type": "string"},
+            "review_sentiment": {"type": "string"},
+            "pain_points": {"type": "string"},
+            "call_volume_estimate": {"type": "string"},
+            "tech_signals": {"type": "string"},
+            "growth_indicators": {"type": "string"},
+            "total_score": {"type": "number"},
+            "tier": {"type": "string"},
+            "scoring_rationale": {"type": "string"},
+            "recommended_approach": {"type": "string"}
+          },
+          "required": ["practice_name", "phone", "address", "website", "practice_type", "practice_size", "review_sentiment", "pain_points", "call_volume_estimate", "tech_signals", "growth_indicators", "total_score", "tier", "scoring_rationale", "recommended_approach"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": ["pipeline_summary", "scored_leads"],
+    "additionalProperties": false
+  }
+}

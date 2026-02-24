@@ -1,0 +1,35 @@
+{
+  "agent_id": "699d9c2f878ad4c6b7213058",
+  "agent_name": "Follow-Up Agent",
+  "agent_type": "json",
+  "accessor": "json",
+  "has_module_outputs": false,
+  "response_schema": {
+    "type": "object",
+    "properties": {
+      "follow_up_results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "practice_name": {"type": "string"},
+            "recipient_email": {"type": "string"},
+            "touchpoint_number": {"type": "number"},
+            "message_theme": {"type": "string"},
+            "send_status": {"type": "string"},
+            "sent_at": {"type": "string"},
+            "days_since_demo": {"type": "number"},
+            "engagement_status": {"type": "string"}
+          },
+          "required": ["practice_name", "recipient_email", "touchpoint_number", "message_theme", "send_status", "sent_at", "days_since_demo", "engagement_status"],
+          "additionalProperties": false
+        }
+      },
+      "total_follow_ups_sent": {"type": "number"},
+      "demo_engaged_count": {"type": "number"},
+      "status": {"type": "string"}
+    },
+    "required": ["follow_up_results", "total_follow_ups_sent", "demo_engaged_count", "status"],
+    "additionalProperties": false
+  }
+}

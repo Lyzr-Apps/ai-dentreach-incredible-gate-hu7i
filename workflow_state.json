@@ -1,0 +1,128 @@
+{
+  "agents": {
+    "lead_scraping_agent": {
+      "agent_id": "699d9bcdbb917835c88b22e0",
+      "name": "Lead Scraping Agent",
+      "type": "sub-agent",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "temperature": 0.2,
+      "top_p": 1,
+      "has_tools": false,
+      "has_voice": false,
+      "has_image_output": false,
+      "has_file_output": false,
+      "has_knowledge_base": false
+    },
+    "lead_enrichment_agent": {
+      "agent_id": "699d9bcd878ad4c6b7213044",
+      "name": "Lead Enrichment Agent",
+      "type": "sub-agent",
+      "provider": "perplexity",
+      "model": "sonar-pro",
+      "temperature": 0.2,
+      "top_p": 1,
+      "has_tools": false,
+      "has_voice": false,
+      "has_image_output": false,
+      "has_file_output": false,
+      "has_knowledge_base": false
+    },
+    "lead_qualification_agent": {
+      "agent_id": "699d9bce608ccd5b6e6834ca",
+      "name": "Lead Qualification Agent",
+      "type": "sub-agent",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "temperature": 0.3,
+      "top_p": 1,
+      "has_tools": false,
+      "has_voice": false,
+      "has_image_output": false,
+      "has_file_output": false,
+      "has_knowledge_base": false
+    },
+    "lead_pipeline_manager": {
+      "agent_id": "699d9c0b878ad4c6b7213054",
+      "name": "Lead Pipeline Manager",
+      "type": "manager",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "temperature": 0.3,
+      "top_p": 1,
+      "has_tools": false,
+      "has_voice": false,
+      "has_image_output": false,
+      "has_file_output": false,
+      "has_knowledge_base": false,
+      "managed_agents": [
+        "699d9bcdbb917835c88b22e0",
+        "699d9bcd878ad4c6b7213044",
+        "699d9bce608ccd5b6e6834ca"
+      ]
+    },
+    "voice_outreach_agent": {
+      "agent_id": "699d9c0c25bfd8a7382bdee6",
+      "name": "Voice Outreach Agent",
+      "type": "voice",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "temperature": 0.5,
+      "top_p": 0.95,
+      "has_tools": false,
+      "has_voice": true,
+      "has_image_output": false,
+      "has_file_output": false,
+      "has_knowledge_base": false,
+      "voice_config": {
+        "initiator": "human",
+        "message": "",
+        "language": "English",
+        "voice": "sage"
+      }
+    },
+    "demo_delivery_agent": {
+      "agent_id": "699d9c2f25bfd8a7382bdeee",
+      "name": "Demo Delivery Agent",
+      "type": "independent",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "has_tools": true,
+      "has_voice": false,
+      "has_image_output": false,
+      "has_file_output": false,
+      "has_knowledge_base": false,
+      "tools": ["GMAIL_SEND_EMAIL"]
+    },
+    "follow_up_agent": {
+      "agent_id": "699d9c2f878ad4c6b7213058",
+      "name": "Follow-Up Agent",
+      "type": "independent",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "temperature": 0.5,
+      "top_p": 0.9,
+      "has_tools": true,
+      "has_voice": false,
+      "has_image_output": false,
+      "has_file_output": false,
+      "has_knowledge_base": false,
+      "tools": ["GMAIL_SEND_EMAIL"]
+    }
+  },
+  "schedules": {
+    "follow_up_agent_schedule": {
+      "schedule_id": "699d9c38399dfadeac390b70",
+      "agent_id": "699d9c2f878ad4c6b7213058",
+      "agent_name": "Follow-Up Agent",
+      "cron_expression": "0 10 * * *",
+      "timezone": "America/New_York",
+      "message": "Run daily follow-up sequence. Check all leads who received demos but haven't responded. Send the appropriate touchpoint email based on days since demo was sent. Flag any newly demo-engaged leads for closer handoff.",
+      "is_active": false,
+      "next_run_time": null
+    }
+  },
+  "rag_ids": {}
+}

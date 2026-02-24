@@ -1,0 +1,40 @@
+{
+  "agent_id": "699d9bce608ccd5b6e6834ca",
+  "agent_name": "Lead Qualification Agent",
+  "agent_type": "json",
+  "accessor": "json",
+  "has_module_outputs": false,
+  "response_schema": {
+    "type": "object",
+    "properties": {
+      "qualified_leads": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "practice_name": {"type": "string"},
+            "total_score": {"type": "number"},
+            "tier": {"type": "string"},
+            "size_score": {"type": "number"},
+            "call_volume_score": {"type": "number"},
+            "pain_point_score": {"type": "number"},
+            "tech_readiness_score": {"type": "number"},
+            "growth_score": {"type": "number"},
+            "geo_score": {"type": "number"},
+            "scoring_rationale": {"type": "string"},
+            "recommended_approach": {"type": "string"}
+          },
+          "required": ["practice_name", "total_score", "tier", "size_score", "call_volume_score", "pain_point_score", "tech_readiness_score", "growth_score", "geo_score", "scoring_rationale", "recommended_approach"],
+          "additionalProperties": false
+        }
+      },
+      "total_qualified": {"type": "number"},
+      "hot_count": {"type": "number"},
+      "warm_count": {"type": "number"},
+      "cold_count": {"type": "number"},
+      "status": {"type": "string"}
+    },
+    "required": ["qualified_leads", "total_qualified", "hot_count", "warm_count", "cold_count", "status"],
+    "additionalProperties": false
+  }
+}
