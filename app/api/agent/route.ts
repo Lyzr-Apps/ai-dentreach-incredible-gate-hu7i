@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
           response: { status: 'error', result: {}, message: 'LYZR_API_KEY not configured' },
           error: 'LYZR_API_KEY not configured on server',
         },
-        { status: 500 }
+        { status: 200 }
       )
     }
 
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
         response: { status: 'error', result: {}, message: errorMsg },
         error: errorMsg,
       },
-      { status: 500 }
+      { status: 200 }
     )
   }
 }
@@ -245,14 +245,16 @@ async function pollTask(task_id: string) {
     const msg = pollRes.status === 404
       ? 'Task expired or not found'
       : `Poll failed with status ${pollRes.status}`
+    // Return as 200 so fetchWrapper doesn't swallow the error
     return NextResponse.json(
       {
         success: false,
         status: 'failed',
+        response: { status: 'error', result: {}, message: msg },
         error: msg,
         raw_response: pollText,
       },
-      { status: pollRes.status }
+      { status: 200 }
     )
   }
 

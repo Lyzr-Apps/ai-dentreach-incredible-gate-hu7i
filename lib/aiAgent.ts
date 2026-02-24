@@ -86,32 +86,48 @@ export async function callAIAgent(
   agent_id: string,
   options?: { user_id?: string; session_id?: string; assets?: string[] }
 ): Promise<AIAgentResponse> {
+  console.log('[callAIAgent] Starting call to agent:', agent_id, '| Message:', message.slice(0, 80))
   try {
     // 1. Submit task — returns { task_id, agent_id, user_id, session_id }
-    const submitRes = await fetchWrapper('/api/agent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message,
-        agent_id,
-        user_id: options?.user_id,
-        session_id: options?.session_id,
-        assets: options?.assets,
-      }),
-    })
-
-    if (!submitRes) {
+    console.log('[callAIAgent] Submitting task to /api/agent...')
+    let submitRes: Response | undefined
+    try {
+      submitRes = await fetchWrapper('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          agent_id,
+          user_id: options?.user_id,
+          session_id: options?.session_id,
+          assets: options?.assets,
+        }),
+      })
+    } catch (fetchErr) {
+      console.error('[callAIAgent] fetchWrapper threw an error during submit:', fetchErr)
       return {
         success: false,
-        response: { status: 'error', result: {}, message: 'No response from server' },
-        error: 'No response from server',
+        response: { status: 'error', result: {}, message: `Network error: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}` },
+        error: `Network error: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`,
       }
     }
 
+    if (!submitRes) {
+      console.error('[callAIAgent] fetchWrapper returned undefined (redirect or page takeover)')
+      return {
+        success: false,
+        response: { status: 'error', result: {}, message: 'No response from server — possible redirect or network issue' },
+        error: 'No response from server — possible redirect or network issue',
+      }
+    }
+
+    console.log('[callAIAgent] Submit response status:', submitRes.status)
     const submitData = await submitRes.json()
+    console.log('[callAIAgent] Submit response data:', JSON.stringify(submitData).slice(0, 200))
 
     // If submit itself failed or no task_id returned, return as-is
     if (!submitData.task_id) {
+      console.error('[callAIAgent] No task_id in submit response:', submitData)
       return submitData.success === false
         ? submitData
         : {
@@ -122,6 +138,7 @@ export async function callAIAgent(
     }
 
     const { task_id, user_id, session_id } = submitData
+    console.log('[callAIAgent] Task submitted successfully. task_id:', task_id)
 
     // 2. Poll POST /api/agent with { task_id } — adaptive backoff from CSR
     const startTime = Date.now()
@@ -132,13 +149,21 @@ export async function callAIAgent(
       await new Promise(r => setTimeout(r, delay))
       attempt++
 
-      const pollRes = await fetchWrapper('/api/agent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task_id }),
-      })
+      let pollRes: Response | undefined
+      try {
+        pollRes = await fetchWrapper('/api/agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id }),
+        })
+      } catch (pollErr) {
+        console.warn('[callAIAgent] Poll fetch error (attempt', attempt, '):', pollErr)
+        continue
+      }
+
       if (!pollRes) {
-        continue // fetchWrapper returned undefined (redirect) — retry next poll
+        console.warn('[callAIAgent] Poll returned undefined (attempt', attempt, '), retrying...')
+        continue
       }
 
       let pollData: any
@@ -146,13 +171,18 @@ export async function callAIAgent(
         pollData = await pollRes.json()
       } catch {
         // Response body could not be parsed as JSON — retry
-        console.warn('[callAIAgent] Poll response was not valid JSON, retrying...')
+        console.warn('[callAIAgent] Poll response was not valid JSON (attempt', attempt, '), retrying...')
         continue
       }
 
       if (pollData.status === 'processing') {
+        if (attempt % 5 === 0) {
+          console.log('[callAIAgent] Still processing... (attempt', attempt, ', elapsed:', Math.round((Date.now() - startTime) / 1000), 's)')
+        }
         continue
       }
+
+      console.log('[callAIAgent] Task completed! Status:', pollData.status, '| Success:', pollData.success)
 
       // Completed or failed — attach agent_id/user_id/session_id and return
       return {
@@ -164,6 +194,7 @@ export async function callAIAgent(
     }
 
     // Timed out
+    console.error('[callAIAgent] Task timed out after 5 minutes. task_id:', task_id)
     return {
       success: false,
       response: {
@@ -174,6 +205,7 @@ export async function callAIAgent(
       error: 'Agent task timed out after 5 minutes',
     }
   } catch (error) {
+    console.error('[callAIAgent] Unexpected error:', error)
     return {
       success: false,
       response: {

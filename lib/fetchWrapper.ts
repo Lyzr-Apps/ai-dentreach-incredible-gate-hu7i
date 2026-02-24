@@ -70,7 +70,19 @@ const fetchWrapper = async (...args) => {
     }
 
     if (response.status == 404) {
+      const requestUrl = typeof args[0] === "string" ? args[0] : args[0]?.url || "";
       const contentType = response.headers.get("content-type") || "";
+
+      // Never replace page with 404 HTML for API routes — return the response
+      // so callers can handle the error
+      if (requestUrl.includes("/api/")) {
+        sendErrorToParent(
+          `Backend returned 404 Not Found for ${requestUrl}`,
+          404,
+          requestUrl,
+        );
+        return response;
+      }
 
       if (contentType.includes("text/html")) {
         const html = await response.text();
@@ -82,7 +94,6 @@ const fetchWrapper = async (...args) => {
 
         return;
       } else {
-        const requestUrl = typeof args[0] === "string" ? args[0] : args[0]?.url || "";
         sendErrorToParent(
           `Backend returned 404 Not Found for ${requestUrl}`,
           404,
@@ -106,11 +117,15 @@ const fetchWrapper = async (...args) => {
   } catch (error) {
     // network failures
     const requestUrl = typeof args[0] === "string" ? args[0] : args[0]?.url || "";
+    console.error(`[FetchWrapper] Network error for ${requestUrl}:`, error);
     sendErrorToParent(
       `Network error: Cannot connect to backend (${requestUrl})`,
       undefined,
       requestUrl,
     );
+    // Re-throw so callers (e.g. callAIAgent) can catch and surface the error
+    // instead of silently receiving undefined
+    throw error;
   }
 };
 

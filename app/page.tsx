@@ -837,11 +837,12 @@ function LeadBoardView({
     setStatusMsg('Running lead pipeline... This may take a few minutes.')
     setActiveAgentId(AGENT_IDS.LEAD_PIPELINE)
     setAgentStatus('Submitting task...')
+    console.log('[DentReach] runPipeline called with location:', location)
+    console.log('[DentReach] Using agent ID:', AGENT_IDS.LEAD_PIPELINE)
     try {
-      const result = await callAIAgent(
-        `Find and qualify dental practices in ${location}. Scrape, enrich, and score all leads found.`,
-        AGENT_IDS.LEAD_PIPELINE
-      )
+      const prompt = `Find and qualify dental practices in ${location}. Scrape, enrich, and score all leads found.`
+      console.log('[DentReach] Calling callAIAgent with prompt:', prompt.slice(0, 100))
+      const result = await callAIAgent(prompt, AGENT_IDS.LEAD_PIPELINE)
       setAgentStatus('Processing response...')
       console.log('[DentReach] Pipeline raw result:', JSON.stringify(result, null, 2))
 
@@ -2019,6 +2020,86 @@ function TwilioConnectionPanel() {
 // ============================================================================
 // SETTINGS VIEW
 // ============================================================================
+function AgentTestPanel() {
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle')
+  const [testResult, setTestResult] = useState('')
+  const [testAgent, setTestAgent] = useState(AGENT_IDS.LEAD_PIPELINE)
+
+  const runTest = async () => {
+    setTestStatus('testing')
+    setTestResult('Sending test request to /api/agent...')
+    console.log('[AgentTest] Testing agent:', testAgent)
+    try {
+      const result = await callAIAgent('Respond with a brief confirmation that you are online and ready. Keep it under 20 words.', testAgent)
+      console.log('[AgentTest] Result:', JSON.stringify(result, null, 2))
+      if (result.success) {
+        const data = extractAgentData(result)
+        const preview = data?.text || data?.message || data?.status || JSON.stringify(data).slice(0, 200)
+        setTestResult(`Agent responded successfully: ${preview}`)
+        setTestStatus('success')
+      } else {
+        setTestResult(`Agent error: ${result.error || result.response?.message || 'Unknown error'}`)
+        setTestStatus('error')
+      }
+    } catch (err: any) {
+      console.error('[AgentTest] Exception:', err)
+      setTestResult(`Exception: ${err?.message ?? 'Unknown error'}`)
+      setTestStatus('error')
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg font-serif">Agent Connectivity Test</CardTitle>
+        <CardDescription>Verify that agents can be reached and are responding</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <select
+            value={testAgent}
+            onChange={(e) => setTestAgent(e.target.value)}
+            className="bg-input border border-border rounded-md px-3 py-1.5 text-sm flex-1 min-w-[200px]"
+          >
+            <option value={AGENT_IDS.LEAD_PIPELINE}>Lead Pipeline Manager</option>
+            <option value={AGENT_IDS.DEMO_DELIVERY}>Demo Delivery Agent</option>
+            <option value={AGENT_IDS.FOLLOW_UP}>Follow-Up Agent</option>
+          </select>
+          <Button
+            onClick={runTest}
+            disabled={testStatus === 'testing'}
+            className="bg-accent text-accent-foreground hover:bg-accent/90"
+            size="sm"
+          >
+            {testStatus === 'testing' ? (
+              <><FiLoader className="w-4 h-4 animate-spin mr-2" />Testing...</>
+            ) : (
+              <><FiActivity className="w-4 h-4 mr-2" />Test Agent</>
+            )}
+          </Button>
+        </div>
+        {testResult && (
+          <div className={`p-3 rounded-md text-sm ${
+            testStatus === 'success' ? 'bg-accent/10 border border-accent/20 text-accent' :
+            testStatus === 'error' ? 'bg-destructive/10 border border-destructive/20 text-destructive' :
+            'bg-secondary/50 border border-border text-muted-foreground'
+          }`}>
+            <div className="flex items-start gap-2">
+              {testStatus === 'success' && <FiCheck className="w-4 h-4 flex-shrink-0 mt-0.5" />}
+              {testStatus === 'error' && <FiAlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />}
+              {testStatus === 'testing' && <FiLoader className="w-4 h-4 animate-spin flex-shrink-0 mt-0.5" />}
+              <p className="text-xs break-all">{testResult}</p>
+            </div>
+          </div>
+        )}
+        <p className="text-[10px] text-muted-foreground">
+          This sends a simple test message to the selected agent and shows the response. Check browser console (F12) for detailed logs.
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
 function SettingsView({
   activeAgentId,
   scheduleId,
@@ -2053,6 +2134,9 @@ function SettingsView({
         <h2 className="text-2xl font-serif font-semibold mb-1">Settings</h2>
         <p className="text-sm text-muted-foreground">Configuration, integrations, and agent status overview</p>
       </div>
+
+      {/* Agent Connectivity Test */}
+      <AgentTestPanel />
 
       {/* Twilio Integration */}
       <TwilioConnectionPanel />
