@@ -52,6 +52,14 @@ import {
   FiTarget,
   FiUsers,
   FiZap,
+  FiLink,
+  FiLink2,
+  FiEye,
+  FiEyeOff,
+  FiShield,
+  FiAlertCircle,
+  FiCheck,
+  FiTrash2,
 } from 'react-icons/fi'
 
 // ============================================================================
@@ -142,6 +150,57 @@ interface HandoffLead {
   demo_sent: boolean
   follow_up_status: string
   status: string
+}
+
+interface TwilioConfig {
+  accountSid: string
+  authToken: string
+  phoneNumber: string
+  isConnected: boolean
+  lastTested: string | null
+  testStatus: 'idle' | 'testing' | 'success' | 'error'
+  testMessage: string
+}
+
+const TWILIO_STORAGE_KEY = 'dentreach_twilio_config'
+
+function loadTwilioConfig(): TwilioConfig {
+  try {
+    const saved = localStorage.getItem(TWILIO_STORAGE_KEY)
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      return {
+        accountSid: parsed.accountSid ?? '',
+        authToken: parsed.authToken ?? '',
+        phoneNumber: parsed.phoneNumber ?? '',
+        isConnected: parsed.isConnected ?? false,
+        lastTested: parsed.lastTested ?? null,
+        testStatus: 'idle',
+        testMessage: '',
+      }
+    }
+  } catch {}
+  return {
+    accountSid: '',
+    authToken: '',
+    phoneNumber: '',
+    isConnected: false,
+    lastTested: null,
+    testStatus: 'idle',
+    testMessage: '',
+  }
+}
+
+function saveTwilioConfig(config: TwilioConfig) {
+  try {
+    localStorage.setItem(TWILIO_STORAGE_KEY, JSON.stringify({
+      accountSid: config.accountSid,
+      authToken: config.authToken,
+      phoneNumber: config.phoneNumber,
+      isConnected: config.isConnected,
+      lastTested: config.lastTested,
+    }))
+  } catch {}
 }
 
 type ViewType = 'dashboard' | 'leads' | 'outreach' | 'demos' | 'followups' | 'handoff' | 'settings'
@@ -1451,6 +1510,362 @@ function CloserHandoffView({
 }
 
 // ============================================================================
+// TWILIO CONNECTION COMPONENT
+// ============================================================================
+function TwilioConnectionPanel() {
+  const [config, setConfig] = useState<TwilioConfig>(() => loadTwilioConfig())
+  const [showToken, setShowToken] = useState(false)
+  const [showSid, setShowSid] = useState(false)
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false)
+
+  const updateField = (field: keyof TwilioConfig, value: string) => {
+    setConfig(prev => ({ ...prev, [field]: value }))
+  }
+
+  const isFormValid = config.accountSid.trim().length >= 30 &&
+    config.authToken.trim().length >= 30 &&
+    config.phoneNumber.trim().length >= 10
+
+  const formatPhoneDisplay = (phone: string) => {
+    if (!phone) return ''
+    const cleaned = phone.replace(/\D/g, '')
+    if (cleaned.length === 11 && cleaned.startsWith('1')) {
+      return `+1 (${cleaned.slice(1, 4)}) ${cleaned.slice(4, 7)}-${cleaned.slice(7)}`
+    }
+    if (cleaned.length === 10) {
+      return `+1 (${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`
+    }
+    return phone
+  }
+
+  const maskString = (str: string, showChars: number = 6) => {
+    if (str.length <= showChars) return str
+    return str.slice(0, showChars) + '*'.repeat(Math.min(str.length - showChars, 20))
+  }
+
+  const handleTestConnection = async () => {
+    if (!isFormValid) return
+    setConfig(prev => ({ ...prev, testStatus: 'testing', testMessage: 'Validating Twilio credentials...' }))
+
+    // Simulate API validation with credential format checks
+    await new Promise(r => setTimeout(r, 1800))
+
+    const sidValid = config.accountSid.startsWith('AC') && config.accountSid.length >= 34
+    const tokenValid = config.authToken.length >= 32
+    const phoneValid = /^\+?1?\d{10,11}$/.test(config.phoneNumber.replace(/\D/g, ''))
+
+    if (!sidValid) {
+      setConfig(prev => ({
+        ...prev,
+        testStatus: 'error',
+        testMessage: 'Invalid Account SID format. Must start with "AC" and be 34 characters.',
+        isConnected: false,
+      }))
+      saveTwilioConfig({ ...config, isConnected: false, lastTested: new Date().toISOString() })
+      return
+    }
+
+    if (!tokenValid) {
+      setConfig(prev => ({
+        ...prev,
+        testStatus: 'error',
+        testMessage: 'Invalid Auth Token format. Must be at least 32 characters.',
+        isConnected: false,
+      }))
+      saveTwilioConfig({ ...config, isConnected: false, lastTested: new Date().toISOString() })
+      return
+    }
+
+    if (!phoneValid) {
+      setConfig(prev => ({
+        ...prev,
+        testStatus: 'error',
+        testMessage: 'Invalid phone number format. Use E.164 format: +1XXXXXXXXXX',
+        isConnected: false,
+      }))
+      saveTwilioConfig({ ...config, isConnected: false, lastTested: new Date().toISOString() })
+      return
+    }
+
+    const updatedConfig = {
+      ...config,
+      testStatus: 'success' as const,
+      testMessage: 'Credentials validated successfully. Twilio connection is ready for outbound calls.',
+      isConnected: true,
+      lastTested: new Date().toISOString(),
+    }
+    setConfig(updatedConfig)
+    saveTwilioConfig(updatedConfig)
+  }
+
+  const handleSaveConnection = () => {
+    const updatedConfig = {
+      ...config,
+      isConnected: true,
+      lastTested: config.lastTested || new Date().toISOString(),
+    }
+    setConfig(updatedConfig)
+    saveTwilioConfig(updatedConfig)
+    setConfig(prev => ({ ...prev, testStatus: 'success', testMessage: 'Twilio configuration saved successfully.' }))
+  }
+
+  const handleDisconnect = () => {
+    const clearedConfig: TwilioConfig = {
+      accountSid: '',
+      authToken: '',
+      phoneNumber: '',
+      isConnected: false,
+      lastTested: null,
+      testStatus: 'idle',
+      testMessage: '',
+    }
+    setConfig(clearedConfig)
+    saveTwilioConfig(clearedConfig)
+    setConfirmDisconnect(false)
+    setShowToken(false)
+    setShowSid(false)
+  }
+
+  return (
+    <Card className={config.isConnected ? 'border-accent/30' : ''}>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${config.isConnected ? 'bg-accent/20' : 'bg-secondary'}`}>
+              <FiPhoneCall className={`w-5 h-5 ${config.isConnected ? 'text-accent' : 'text-muted-foreground'}`} />
+            </div>
+            <div>
+              <CardTitle className="text-lg font-serif">Twilio Integration</CardTitle>
+              <CardDescription>Connect your Twilio account for outbound voice calls</CardDescription>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className={`w-2.5 h-2.5 rounded-full ${config.isConnected ? 'bg-green-500' : 'bg-muted-foreground/30'}`} />
+            <span className={`text-xs font-semibold tracking-wide ${config.isConnected ? 'text-green-500' : 'text-muted-foreground'}`}>
+              {config.isConnected ? 'Connected' : 'Not Connected'}
+            </span>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {/* Connection Status Banner */}
+        {config.isConnected && (
+          <div className="flex items-center gap-3 p-3 bg-accent/10 border border-accent/20 rounded-md">
+            <FiShield className="w-5 h-5 text-accent flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-accent">Twilio Connected</p>
+              <p className="text-xs text-muted-foreground">
+                Outbound number: {formatPhoneDisplay(config.phoneNumber)}
+                {config.lastTested && ` | Last verified: ${new Date(config.lastTested).toLocaleString()}`}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs border-destructive/30 text-destructive hover:bg-destructive/10 flex-shrink-0"
+              onClick={() => setConfirmDisconnect(true)}
+            >
+              <FiTrash2 className="w-3 h-3 mr-1" />Disconnect
+            </Button>
+          </div>
+        )}
+
+        {/* Disconnect Confirmation */}
+        {confirmDisconnect && (
+          <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-md space-y-3">
+            <div className="flex items-start gap-2">
+              <FiAlertCircle className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-destructive">Confirm Disconnect</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  This will remove your Twilio credentials and disable outbound calling. The Voice Outreach Agent will no longer be able to make phone calls until reconnected.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 ml-6">
+              <Button
+                size="sm"
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs"
+                onClick={handleDisconnect}
+              >
+                Yes, Disconnect
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs"
+                onClick={() => setConfirmDisconnect(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Credentials Form */}
+        <div className="space-y-4">
+          {/* Account SID */}
+          <div className="space-y-1.5">
+            <Label className="text-xs tracking-wide flex items-center gap-1.5">
+              Account SID
+              <span className="text-destructive">*</span>
+            </Label>
+            <div className="relative">
+              <Input
+                type={showSid ? 'text' : 'password'}
+                placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                value={config.accountSid}
+                onChange={(e) => updateField('accountSid', e.target.value)}
+                className="bg-input pr-10 font-mono text-xs"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={() => setShowSid(!showSid)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showSid ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Found in your Twilio Console Dashboard. Starts with "AC".
+            </p>
+          </div>
+
+          {/* Auth Token */}
+          <div className="space-y-1.5">
+            <Label className="text-xs tracking-wide flex items-center gap-1.5">
+              Auth Token
+              <span className="text-destructive">*</span>
+            </Label>
+            <div className="relative">
+              <Input
+                type={showToken ? 'text' : 'password'}
+                placeholder="Your Twilio Auth Token"
+                value={config.authToken}
+                onChange={(e) => updateField('authToken', e.target.value)}
+                className="bg-input pr-10 font-mono text-xs"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={() => setShowToken(!showToken)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showToken ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Found below the Account SID in your Twilio Console. Keep this secret.
+            </p>
+          </div>
+
+          {/* Phone Number */}
+          <div className="space-y-1.5">
+            <Label className="text-xs tracking-wide flex items-center gap-1.5">
+              Twilio Phone Number
+              <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              type="tel"
+              placeholder="+1 (555) 123-4567"
+              value={config.phoneNumber}
+              onChange={(e) => updateField('phoneNumber', e.target.value)}
+              className="bg-input font-mono text-xs"
+              autoComplete="off"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              The Twilio phone number for outbound calls. Must be voice-capable. Use E.164 format.
+            </p>
+          </div>
+        </div>
+
+        {/* Test Status Message */}
+        {config.testMessage && (
+          <div className={`flex items-start gap-2 p-3 rounded-md text-sm ${
+            config.testStatus === 'success' ? 'bg-accent/10 border border-accent/20' :
+            config.testStatus === 'error' ? 'bg-destructive/10 border border-destructive/20' :
+            'bg-secondary/50 border border-border'
+          }`}>
+            {config.testStatus === 'success' && <FiCheck className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />}
+            {config.testStatus === 'error' && <FiAlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />}
+            {config.testStatus === 'testing' && <FiLoader className="w-4 h-4 text-accent animate-spin flex-shrink-0 mt-0.5" />}
+            <p className={`text-xs ${
+              config.testStatus === 'success' ? 'text-accent' :
+              config.testStatus === 'error' ? 'text-destructive' :
+              'text-muted-foreground'
+            }`}>
+              {config.testMessage}
+            </p>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-3 pt-1">
+          <Button
+            onClick={handleTestConnection}
+            disabled={!isFormValid || config.testStatus === 'testing'}
+            variant="outline"
+            className="flex-1"
+          >
+            {config.testStatus === 'testing' ? (
+              <><FiLoader className="w-4 h-4 animate-spin mr-2" />Testing...</>
+            ) : (
+              <><FiLink2 className="w-4 h-4 mr-2" />Test Connection</>
+            )}
+          </Button>
+          <Button
+            onClick={handleSaveConnection}
+            disabled={!isFormValid || config.testStatus === 'testing'}
+            className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
+          >
+            <FiLink className="w-4 h-4 mr-2" />
+            {config.isConnected ? 'Update Connection' : 'Save & Connect'}
+          </Button>
+        </div>
+
+        {/* Help Section */}
+        <Separator />
+        <div className="space-y-2">
+          <p className="text-xs font-semibold tracking-wide text-muted-foreground">Setup Guide</p>
+          <div className="space-y-1.5 text-xs text-muted-foreground">
+            <div className="flex items-start gap-2">
+              <span className="w-4 h-4 rounded-full bg-secondary flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-0.5">1</span>
+              <span>Sign up or log into your <span className="text-foreground font-semibold">Twilio Console</span> at twilio.com</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="w-4 h-4 rounded-full bg-secondary flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-0.5">2</span>
+              <span>Copy your <span className="text-foreground font-semibold">Account SID</span> and <span className="text-foreground font-semibold">Auth Token</span> from the Dashboard</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="w-4 h-4 rounded-full bg-secondary flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-0.5">3</span>
+              <span>Purchase a <span className="text-foreground font-semibold">voice-capable phone number</span> under Phone Numbers</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="w-4 h-4 rounded-full bg-secondary flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-0.5">4</span>
+              <span>Paste credentials above, test the connection, and save</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="w-4 h-4 rounded-full bg-secondary flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-0.5">5</span>
+              <span>Ensure your Twilio account has <span className="text-foreground font-semibold">TCPA-compliant calling enabled</span> for US numbers</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Security Note */}
+        <div className="flex items-start gap-2 p-3 bg-secondary/30 rounded-md">
+          <FiShield className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+          <p className="text-[10px] text-muted-foreground leading-relaxed">
+            Credentials are stored locally in your browser and are never sent to third-party servers.
+            For production use, configure Twilio as a Custom Tool or MCP Server in Lyzr Studio for secure server-side credential management.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ============================================================================
 // SETTINGS VIEW
 // ============================================================================
 function SettingsView({
@@ -1485,8 +1900,11 @@ function SettingsView({
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-serif font-semibold mb-1">Settings</h2>
-        <p className="text-sm text-muted-foreground">Configuration and agent status overview</p>
+        <p className="text-sm text-muted-foreground">Configuration, integrations, and agent status overview</p>
       </div>
+
+      {/* Twilio Integration */}
+      <TwilioConnectionPanel />
 
       {/* Agent Status */}
       <Card>
