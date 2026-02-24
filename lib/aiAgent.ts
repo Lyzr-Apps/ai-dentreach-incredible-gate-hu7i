@@ -138,9 +138,17 @@ export async function callAIAgent(
         body: JSON.stringify({ task_id }),
       })
       if (!pollRes) {
-        continue // fetchWrapper returned undefined (redirect/error) — retry next poll
+        continue // fetchWrapper returned undefined (redirect) — retry next poll
       }
-      const pollData = await pollRes.json()
+
+      let pollData: any
+      try {
+        pollData = await pollRes.json()
+      } catch {
+        // Response body could not be parsed as JSON — retry
+        console.warn('[callAIAgent] Poll response was not valid JSON, retrying...')
+        continue
+      }
 
       if (pollData.status === 'processing') {
         continue

@@ -263,7 +263,8 @@ async function pollTask(task_id: string) {
     return NextResponse.json({ status: 'processing' })
   }
 
-  // Task failed
+  // Task failed — return as 200 with success:false so client can read the error
+  // (returning 500 causes fetchWrapper to swallow the response)
   if (task.status === 'failed') {
     return NextResponse.json(
       {
@@ -272,7 +273,7 @@ async function pollTask(task_id: string) {
         response: { status: 'error', result: {}, message: task.error || 'Agent task failed' },
         error: task.error || 'Agent task failed',
       },
-      { status: 500 }
+      { status: 200 }
     )
   }
 

@@ -97,7 +97,9 @@ const fetchWrapper = async (...args) => {
         response.status,
         requestUrl,
       );
-      return;
+      // Return the response so callers can read error details
+      // instead of silently swallowing the error
+      return response;
     }
 
     return response;

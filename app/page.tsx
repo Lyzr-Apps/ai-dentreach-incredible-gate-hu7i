@@ -75,6 +75,80 @@ const AGENT_IDS = {
 const SCHEDULE_ID_INIT = '699d9c38399dfadeac390b70'
 
 // ============================================================================
+// SAFE RESPONSE EXTRACTOR
+// ============================================================================
+/**
+ * Extracts the actual data payload from callAIAgent() response.
+ *
+ * callAIAgent returns: { success, response: { status, result, message }, raw_response, ... }
+ * The API route normalizes the Lyzr response into: { status, result: {...} }
+ *
+ * This helper walks through every possible nesting:
+ *   result.response.result -> maybe object already, maybe stringified JSON
+ *   result.response        -> fallback
+ *   result.raw_response    -> last resort (raw text from Lyzr)
+ */
+function extractAgentData(result: any): any {
+  if (!result) return null
+
+  // 1. Try result.response.result (the normalized path from API route)
+  const responseResult = result?.response?.result
+  if (responseResult && typeof responseResult === 'object' && Object.keys(responseResult).length > 0) {
+    // Check if result has domain-specific keys — these are already parsed, use directly
+    const keys = Object.keys(responseResult)
+    const domainKeys = [
+      'scored_leads', 'pipeline_summary', 'email_details', 'follow_up_results',
+      'call_summary', 'leads', 'enriched_leads', 'qualified_leads',
+      'total_scraped', 'total_enriched', 'total_qualified',
+      'practice_name', 'recipient_email', 'subject', 'body_preview',
+      'total_follow_ups_sent', 'demo_engaged_count',
+    ]
+    if (keys.some(k => domainKeys.includes(k))) return responseResult
+
+    // If only has { text: "..." } — the message might contain JSON inside it
+    if (keys.length === 1 && keys[0] === 'text' && typeof responseResult.text === 'string') {
+      const innerParsed = parseLLMJson(responseResult.text)
+      if (innerParsed && typeof innerParsed === 'object' && !innerParsed.error) {
+        return innerParsed
+      }
+      // Return text wrapper as-is if not JSON
+      return responseResult
+    }
+
+    // Return the object as-is — it's already a valid parsed result
+    return responseResult
+  }
+
+  // 2. If result.response.result is a string, parse it
+  if (typeof responseResult === 'string' && responseResult.trim()) {
+    const parsed = parseLLMJson(responseResult)
+    if (parsed && typeof parsed === 'object' && !parsed.error) return parsed
+    // If not parseable, wrap as text
+    return { text: responseResult }
+  }
+
+  // 3. Try the response.message field (sometimes the actual data is in message)
+  if (result?.response?.message && typeof result.response.message === 'string') {
+    const parsed = parseLLMJson(result.response.message)
+    if (parsed && typeof parsed === 'object' && !parsed.error) return parsed
+    return { text: result.response.message }
+  }
+
+  // 4. Try raw_response (last resort fallback to original Lyzr output)
+  if (result?.raw_response) {
+    const parsed = parseLLMJson(result.raw_response)
+    if (parsed && typeof parsed === 'object' && !parsed.error) return parsed
+  }
+
+  // 5. If response exists as object, use it directly
+  if (result?.response && typeof result.response === 'object') {
+    return result.response
+  }
+
+  return null
+}
+
+// ============================================================================
 // TYPES
 // ============================================================================
 interface PipelineSummary {
@@ -729,6 +803,7 @@ function LeadBoardView({
   setSummary,
   showSample,
   setActiveAgentId,
+  setAgentStatus,
   onLaunchOutreach,
   onSendDemo,
 }: {
@@ -737,6 +812,7 @@ function LeadBoardView({
   setSummary: (s: PipelineSummary) => void
   showSample: boolean
   setActiveAgentId: (id: string | null) => void
+  setAgentStatus: (s: string) => void
   onLaunchOutreach: (lead: ScoredLead) => void
   onSendDemo: (lead: ScoredLead) => void
 }) {
@@ -760,32 +836,107 @@ function LeadBoardView({
     setLoading(true)
     setStatusMsg('Running lead pipeline... This may take a few minutes.')
     setActiveAgentId(AGENT_IDS.LEAD_PIPELINE)
+    setAgentStatus('Submitting task...')
     try {
       const result = await callAIAgent(
         `Find and qualify dental practices in ${location}. Scrape, enrich, and score all leads found.`,
         AGENT_IDS.LEAD_PIPELINE
       )
+      setAgentStatus('Processing response...')
+      console.log('[DentReach] Pipeline raw result:', JSON.stringify(result, null, 2))
+
       if (result.success) {
-        const parsed = parseLLMJson(result?.response?.result || result?.response)
-        const scoredLeads = Array.isArray(parsed?.scored_leads) ? parsed.scored_leads : []
-        const pSummary = parsed?.pipeline_summary
+        const data = extractAgentData(result)
+        console.log('[DentReach] Pipeline extracted data:', JSON.stringify(data, null, 2))
+
+        if (!data) {
+          setStatusMsg('Pipeline completed but could not parse the response. Check console for details.')
+          setLoading(false)
+          setActiveAgentId(null)
+          return
+        }
+
+        // Handle various response shapes from the manager agent
+        let scoredLeads: ScoredLead[] = []
+        let pSummary: PipelineSummary | null = null
+
+        // Direct shape: { pipeline_summary, scored_leads }
+        if (Array.isArray(data.scored_leads)) {
+          scoredLeads = data.scored_leads
+        }
+        // Nested in result: { result: { pipeline_summary, scored_leads } }
+        if (scoredLeads.length === 0 && data.result && Array.isArray(data.result.scored_leads)) {
+          scoredLeads = data.result.scored_leads
+        }
+        // Sub-agent aggregated: leads might be under different keys
+        if (scoredLeads.length === 0 && Array.isArray(data.leads)) {
+          scoredLeads = data.leads
+        }
+        if (scoredLeads.length === 0 && Array.isArray(data.qualified_leads)) {
+          scoredLeads = data.qualified_leads.map((ql: any) => ({
+            ...ql,
+            phone: ql.phone ?? '',
+            address: ql.address ?? '',
+            website: ql.website ?? '',
+            practice_type: ql.practice_type ?? '',
+            practice_size: ql.practice_size ?? '',
+            review_sentiment: ql.review_sentiment ?? '',
+            pain_points: ql.pain_points ?? '',
+            call_volume_estimate: ql.call_volume_estimate ?? '',
+            tech_signals: ql.tech_signals ?? '',
+            growth_indicators: ql.growth_indicators ?? '',
+          }))
+        }
+
+        // Extract summary
+        if (data.pipeline_summary) {
+          pSummary = data.pipeline_summary
+        } else if (data.result?.pipeline_summary) {
+          pSummary = data.result.pipeline_summary
+        } else if (scoredLeads.length > 0) {
+          // Build summary from leads data
+          const hot = scoredLeads.filter(l => (l.tier ?? '').toLowerCase() === 'hot').length
+          const warm = scoredLeads.filter(l => (l.tier ?? '').toLowerCase() === 'warm').length
+          const cold = scoredLeads.filter(l => (l.tier ?? '').toLowerCase() === 'cold').length
+          pSummary = {
+            total_scraped: scoredLeads.length,
+            total_enriched: scoredLeads.length,
+            total_qualified: scoredLeads.length,
+            hot_leads: hot,
+            warm_leads: warm,
+            cold_leads: cold,
+            execution_time: 'N/A',
+            status: 'completed',
+          }
+        }
+
         if (scoredLeads.length > 0) {
           setLeads(scoredLeads)
           setStatusMsg(`Pipeline complete! Found ${scoredLeads.length} qualified leads.`)
         } else {
-          setStatusMsg('Pipeline completed but no leads were returned. Try a different location.')
+          // Show agent's text response if available, otherwise generic message
+          const agentText = data?.text || data?.message || ''
+          if (agentText) {
+            setStatusMsg(`Pipeline responded: ${agentText.slice(0, 200)}`)
+          } else {
+            setStatusMsg('Pipeline completed but no leads were returned. The agent may need more specific criteria. Try: "Austin, TX within 10 miles"')
+          }
         }
         if (pSummary) {
           setSummary(pSummary)
         }
       } else {
-        setStatusMsg(`Error: ${result?.error ?? 'Pipeline failed. Please try again.'}`)
+        const errDetail = result?.error || result?.response?.message || 'Pipeline failed. Please try again.'
+        setStatusMsg(`Error: ${errDetail}`)
+        console.error('[DentReach] Pipeline error:', result)
       }
     } catch (err: any) {
       setStatusMsg(`Error: ${err?.message ?? 'Unknown error occurred.'}`)
+      console.error('[DentReach] Pipeline exception:', err)
     }
     setLoading(false)
     setActiveAgentId(null)
+    setAgentStatus('')
   }
 
   return (
@@ -2050,12 +2201,17 @@ function VoiceDialogComponent({
     setCallDuration(0)
 
     try {
+      console.log('[DentReach] Starting voice session for agent:', AGENT_IDS.VOICE_OUTREACH)
       const res = await fetch('https://voice-sip.studio.lyzr.ai/session/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ agentId: AGENT_IDS.VOICE_OUTREACH }),
       })
-      if (!res.ok) throw new Error('Failed to start voice session')
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '')
+        console.error('[DentReach] Voice session start failed:', res.status, errText)
+        throw new Error(`Failed to start voice session (${res.status}): ${errText || 'Unknown error'}`)
+      }
       const data = await res.json()
       const wsUrl = data?.wsUrl
       const sampleRate = data?.audioConfig?.sampleRate ?? 24000
@@ -2316,12 +2472,14 @@ function DemoSendDialogComponent({
   lead,
   addDemo,
   setActiveAgentId,
+  setAgentStatus,
 }: {
   open: boolean
   onClose: () => void
   lead: ScoredLead | null
   addDemo: (demo: DemoRecord) => void
   setActiveAgentId: (id: string | null) => void
+  setAgentStatus: (s: string) => void
 }) {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
@@ -2335,18 +2493,24 @@ function DemoSendDialogComponent({
     setLoading(true)
     setStatusMsg('Sending personalized demo email...')
     setActiveAgentId(AGENT_IDS.DEMO_DELIVERY)
+    setAgentStatus('Composing email...')
     try {
       const message = `Send a personalized demo email for DentReach AI to ${email} for the dental practice "${lead.practice_name}". Practice details: Type: ${lead.practice_type}, Size: ${lead.practice_size}, Pain points: ${lead.pain_points}, Call volume: ${lead.call_volume_estimate}, Score: ${lead.total_score}, Tier: ${lead.tier}. Recommended approach: ${lead.recommended_approach}`
       const result = await callAIAgent(message, AGENT_IDS.DEMO_DELIVERY)
+      setAgentStatus('Processing response...')
+      console.log('[DentReach] Demo delivery raw result:', JSON.stringify(result, null, 2))
+
       if (result.success) {
-        const parsed = parseLLMJson(result?.response?.result || result?.response)
-        const details = parsed?.email_details
+        const data = extractAgentData(result)
+        console.log('[DentReach] Demo delivery extracted:', JSON.stringify(data, null, 2))
+
+        const details = data?.email_details || data
         addDemo({
           id: generateId(),
           recipient_email: details?.recipient_email ?? email,
-          subject: details?.subject ?? 'DentReach AI Demo',
-          body_preview: details?.body_preview ?? 'Personalized demo content',
-          personalization_factors: details?.personalization_factors ?? '',
+          subject: details?.subject ?? `DentReach AI Demo - ${lead.practice_name}`,
+          body_preview: details?.body_preview ?? details?.body ?? details?.text ?? 'Personalized demo email sent successfully',
+          personalization_factors: details?.personalization_factors ?? `${lead.practice_type}, ${lead.pain_points}`,
           send_status: details?.send_status ?? 'Sent',
           sent_at: details?.sent_at ?? new Date().toISOString(),
           practice_name: details?.practice_name ?? lead.practice_name,
@@ -2355,13 +2519,17 @@ function DemoSendDialogComponent({
         setEmail('')
         setTimeout(() => onClose(), 1500)
       } else {
-        setStatusMsg(`Error: ${result?.error ?? 'Failed to send demo.'}`)
+        const errDetail = result?.error || result?.response?.message || 'Failed to send demo.'
+        setStatusMsg(`Error: ${errDetail}`)
+        console.error('[DentReach] Demo delivery error:', result)
       }
     } catch (err: any) {
       setStatusMsg(`Error: ${err?.message ?? 'Unknown error occurred.'}`)
+      console.error('[DentReach] Demo delivery exception:', err)
     }
     setLoading(false)
     setActiveAgentId(null)
+    setAgentStatus('')
   }
 
   return (
@@ -2421,6 +2589,7 @@ export default function Page() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showSample, setShowSample] = useState(false)
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null)
+  const [agentStatus, setAgentStatus] = useState('')
 
   // Data state
   const [leads, setLeads] = useState<ScoredLead[]>([])
@@ -2573,7 +2742,10 @@ export default function Page() {
               {activeAgentId && (
                 <div className="flex items-center gap-2 text-xs text-accent">
                   <FiActivity className="w-3.5 h-3.5 animate-pulse" />
-                  <span className="tracking-wide">{AGENTS_INFO.find(a => a.id === activeAgentId)?.name ?? 'Agent'} active</span>
+                  <span className="tracking-wide">
+                    {AGENTS_INFO.find(a => a.id === activeAgentId)?.name ?? 'Agent'} active
+                    {agentStatus ? ` — ${agentStatus}` : ''}
+                  </span>
                 </div>
               )}
             </div>
@@ -2604,6 +2776,7 @@ export default function Page() {
                   setSummary={setSummary}
                   showSample={showSample}
                   setActiveAgentId={setActiveAgentId}
+                  setAgentStatus={setAgentStatus}
                   onLaunchOutreach={onLaunchOutreach}
                   onSendDemo={onSendDemo}
                 />
@@ -2663,6 +2836,7 @@ export default function Page() {
           lead={demoLead}
           addDemo={addDemo}
           setActiveAgentId={setActiveAgentId}
+          setAgentStatus={setAgentStatus}
         />
       </div>
     </ErrorBoundary>
